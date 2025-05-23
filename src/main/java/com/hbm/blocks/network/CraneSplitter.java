@@ -1,14 +1,17 @@
 package com.hbm.blocks.network;
 
+import api.hbm.block.IToolable;
 import api.hbm.conveyor.IConveyorBelt;
 import api.hbm.conveyor.IConveyorItem;
 import api.hbm.conveyor.IConveyorPackage;
 import api.hbm.conveyor.IEnterableBlock;
 import com.hbm.blocks.BlockDummyable;
+import com.hbm.blocks.ILookOverlay;
 import com.hbm.blocks.ITooltipProvider;
 import com.hbm.entity.item.EntityMovingItem;
 import com.hbm.lib.RefStrings;
 import com.hbm.tileentity.network.TileEntityCraneSplitter;
+import com.hbm.util.I18nUtil;
 import cpw.mods.fml.client.registry.RenderingRegistry;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -17,15 +20,18 @@ import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IIcon;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.common.util.ForgeDirection;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public class CraneSplitter extends BlockDummyable implements IConveyorBelt, IEnterableBlock, ITooltipProvider {
+public class CraneSplitter extends BlockDummyable implements IConveyorBelt, IEnterableBlock, ITooltipProvider, ILookOverlay, IToolable {
 
 	@SideOnly(Side.CLIENT) public IIcon iconTopLeft;
 	@SideOnly(Side.CLIENT) public IIcon iconTopRight;
@@ -96,21 +102,44 @@ public class CraneSplitter extends BlockDummyable implements IConveyorBelt, IEnt
 		TileEntity tile = world.getTileEntity(x, y, z);
 		if(!(tile instanceof TileEntityCraneSplitter)) return;
 		TileEntityCraneSplitter splitter = (TileEntityCraneSplitter) tile;
-		boolean pos = splitter.getPosition();
+		int pos = splitter.position;
 		ItemStack stack = entity.getItemStack();
 		ForgeDirection rot = ForgeDirection.getOrientation(splitter.getBlockMetadata() - offset).getRotation(ForgeDirection.DOWN);
-
-		if(stack.stackSize % 2 == 0) {
-			stack.stackSize /= 2;
+		int split = splitter.split;
+		if(stack.stackSize % split == 0) {
+			int baseSize = stack.stackSize /= split;
+			stack.stackSize = baseSize*(split-1);
 			spawnMovingItem(world, x, y, z, stack.copy());
+			stack.stackSize = baseSize*(split-(split-1));
 			spawnMovingItem(world, x + rot.offsetX, y, z + rot.offsetZ, stack.copy());
 		} else {
-			int baseSize = stack.stackSize /= 2;
-			stack.stackSize = baseSize + (pos ? 0 : 1);
-			spawnMovingItem(world, x, y, z, stack.copy());
-			stack.stackSize = baseSize + (pos ? 1 : 0);
-			spawnMovingItem(world, x + rot.offsetX, y, z + rot.offsetZ, stack.copy());
-			splitter.setPosition(!pos);
+			int remainder = stack.stackSize % split;
+			int add1 = 0;
+			int add2 = 0;
+			while (remainder>0){
+				if (pos < (split-1)){
+					add1++;
+					remainder--;
+					pos++;
+				} else {
+					add2++;
+					remainder--;
+					pos=0;
+				}
+				splitter.position = pos;
+			}
+			int baseSize = stack.stackSize /= split;
+			if (!splitter.side){
+				stack.stackSize = baseSize*(split-1)+add1;
+				spawnMovingItem(world, x, y, z, stack.copy());
+				stack.stackSize = baseSize*(split-(split-1))+add2;
+				spawnMovingItem(world, x + rot.offsetX, y, z + rot.offsetZ, stack.copy());
+			} else {
+				stack.stackSize = baseSize*(split-1)+add1;
+				spawnMovingItem(world, x + rot.offsetX, y, z + rot.offsetZ, stack.copy());
+				stack.stackSize = baseSize*(split-(split-1))+add2;
+				spawnMovingItem(world, x, y, z, stack.copy());
+			}
 		}
 	}
 
@@ -159,7 +188,65 @@ public class CraneSplitter extends BlockDummyable implements IConveyorBelt, IEnt
 	}
 
 	@Override
+	public boolean onScrew(World world, EntityPlayer player, int x, int y, int z, int side, float fX, float fY, float fZ, IToolable.ToolType tool) {
+		if (world.isRemote)
+			return true;
+		int[] pos = this.findCore(world, x, y, z);
+
+		if(pos == null)
+			return false;
+
+		TileEntity te = world.getTileEntity(pos[0], pos[1], pos[2]);
+
+		if(!(te instanceof TileEntityCraneSplitter)) return false;
+
+		TileEntityCraneSplitter splitter = (TileEntityCraneSplitter) te;
+		if(tool == ToolType.SCREWDRIVER) {
+
+			if (!player.isSneaking()) {
+				splitter.split++;
+			} else {
+				splitter.split--;
+			}
+			splitter.markDirty();
+			world.markBlockForUpdate(x, y, z);
+			return true;
+		}
+		if (tool == ToolType.HAND_DRILL) {
+			splitter.side = (!splitter.side);
+			splitter.markDirty();
+			world.markBlockForUpdate(x, y, z);
+			return true;
+		}
+		return false;
+	}
+
+	@Override
 	public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean ext) {
 		this.addStandardInfo(stack, player, list, ext);
 	}
+
+	@Override
+	public void printHook(RenderGameOverlayEvent.Pre event, World world, int x, int y, int z) {
+
+		int[] pos = this.findCore(world, x, y, z);
+
+		if (pos == null)
+			return;
+
+		TileEntity te = world.getTileEntity(pos[0], pos[1], pos[2]);
+		TileEntityCraneSplitter splitter = (TileEntityCraneSplitter) te;
+
+		if (!(te instanceof TileEntityCraneSplitter))
+			return;
+		List<String> text = new ArrayList();
+		if (!splitter.side) {
+			text.add(EnumChatFormatting.GREEN + "Ratio: " + EnumChatFormatting.RED + (splitter.split-1) + ":1");
+		} else {
+			text.add(EnumChatFormatting.GREEN + "Ratio: " + EnumChatFormatting.RED + "1:" + (splitter.split-1));
+		}
+
+		ILookOverlay.printGeneric(event, I18nUtil.resolveKey(getUnlocalizedName() + ".name"), 0xffff00, 0x404000, text);
+	}
 }
+
