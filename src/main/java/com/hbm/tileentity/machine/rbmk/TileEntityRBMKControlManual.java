@@ -2,6 +2,7 @@ package com.hbm.tileentity.machine.rbmk;
 
 import com.hbm.blocks.machine.rbmk.RBMKControl;
 import com.hbm.interfaces.IControlReceiver;
+import com.hbm.interfaces.ICopiable;
 import com.hbm.inventory.container.ContainerRBMKControl;
 import com.hbm.inventory.gui.GUIRBMKControl;
 import com.hbm.tileentity.machine.rbmk.TileEntityRBMKConsole.ColumnType;
@@ -20,11 +21,11 @@ import net.minecraft.util.MathHelper;
 import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
-public class TileEntityRBMKControlManual extends TileEntityRBMKControl implements IControlReceiver {
+public class TileEntityRBMKControlManual extends TileEntityRBMKControl implements IControlReceiver, ICopiable {
 
 	public RBMKColor color;
 	public double startingLevel;
-	
+
 	public TileEntityRBMKControlManual() {
 		super();
 	}
@@ -33,7 +34,7 @@ public class TileEntityRBMKControlManual extends TileEntityRBMKControl implement
 	public String getName() {
 		return "container.rbmkControl";
 	}
-	
+
 	@Override
 	public boolean isModerated() {
 		return ((RBMKControl)this.getBlockType()).moderated;
@@ -44,17 +45,17 @@ public class TileEntityRBMKControlManual extends TileEntityRBMKControl implement
 		this.targetLevel = target;
 		this.startingLevel = this.level;
 	}
-	
+
 	@Override
 	public double getMult() {
-		
+
 		double surge = 0;
-		
+
 		if(this.targetLevel < this.startingLevel && Math.abs(this.level - this.targetLevel) > 0.01D) {
 			surge = Math.sin(Math.pow((1D - this.level), 15) * Math.PI) * (this.startingLevel - this.targetLevel) * RBMKDials.getSurgeMod(worldObj);
-			
+
 		}
-		
+
 		return this.level + surge;
 	}
 
@@ -65,26 +66,26 @@ public class TileEntityRBMKControlManual extends TileEntityRBMKControl implement
 
 	@Override
 	public void receiveControl(NBTTagCompound data) {
-		
+
 		if(data.hasKey("level")) {
 			this.setTarget(data.getDouble("level"));
 		}
-		
+
 		if(data.hasKey("color")) {
 			int c = Math.abs(data.getInteger("color")) % RBMKColor.values().length; //to stop naughty kids from sending packets that crash the server
-			
+
 			RBMKColor newCol = RBMKColor.values()[c];
-			
+
 			if(newCol == this.color) {
 				this.color = null;
 			} else {
 				this.color = newCol;
 			}
 		}
-		
+
 		this.markDirty();
 	}
-	
+
 	@Override
 	public void readFromNBT(NBTTagCompound nbt) {
 		super.readFromNBT(nbt);
@@ -97,14 +98,14 @@ public class TileEntityRBMKControlManual extends TileEntityRBMKControl implement
 		else
 			this.color = null;
 	}
-	
+
 	@Override
 	public void writeToNBT(NBTTagCompound nbt) {
 		super.writeToNBT(nbt);
 
 		nbt.setDouble("startingLevel", this.startingLevel);
 		nbt.setDouble("mult", this.getMult());
-		
+
 		if(color != null)
 			nbt.setInteger("color", color.ordinal());
 	}
@@ -126,7 +127,21 @@ public class TileEntityRBMKControlManual extends TileEntityRBMKControl implement
 			this.color = RBMKColor.values()[MathHelper.clamp_int(color, 0, RBMKColor.values().length)];
 		}
 	}
-	
+
+	@Override
+	public NBTTagCompound getSettings(World world, int x, int y, int z) {
+		NBTTagCompound nbt = new NBTTagCompound();
+		nbt.setDouble("targetLevel", this.targetLevel);
+		return nbt;
+	}
+
+	@Override
+	public void pasteSettings(NBTTagCompound nbt, int index, World world, EntityPlayer player, int x, int y, int z) {
+		this.targetLevel = nbt.getDouble("targetLevel");
+		if (this.level != this.targetLevel)
+			this.startingLevel = this.level;
+	}
+
 	public static enum RBMKColor {
 		RED,
 		YELLOW,
@@ -143,15 +158,15 @@ public class TileEntityRBMKControlManual extends TileEntityRBMKControl implement
 	@Override
 	public NBTTagCompound getNBTForConsole() {
 		NBTTagCompound data = super.getNBTForConsole();
-		
+
 		if(this.color != null)
 			data.setShort("color", (short)this.color.ordinal());
 		else
 			data.setShort("color", (short)-1);
-		
+
 		return data;
 	}
-	
+
 	@Callback(direct = true)
 	@Optional.Method(modid = "OpenComputers")
 	public Object[] getColor(Context context, Arguments args) {
@@ -177,5 +192,5 @@ public class TileEntityRBMKControlManual extends TileEntityRBMKControl implement
 	@SideOnly(Side.CLIENT)
 	public Object provideGUI(int ID, EntityPlayer player, World world, int x, int y, int z) {
 		return new GUIRBMKControl(player.inventory, this);
-	}	
+	}
 }

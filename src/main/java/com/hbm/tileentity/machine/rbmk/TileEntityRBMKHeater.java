@@ -4,6 +4,7 @@ import api.hbm.fluid.IFluidStandardTransceiver;
 import com.hbm.blocks.ModBlocks;
 import com.hbm.entity.projectile.EntityRBMKDebris.DebrisType;
 import com.hbm.handler.CompatHandler;
+import com.hbm.interfaces.ICopiable;
 import com.hbm.inventory.container.ContainerRBMKHeater;
 import com.hbm.inventory.fluid.Fluids;
 import com.hbm.inventory.fluid.tank.FluidTank;
@@ -12,6 +13,7 @@ import com.hbm.inventory.fluid.trait.FT_Heatable.HeatingStep;
 import com.hbm.inventory.fluid.trait.FT_Heatable.HeatingType;
 import com.hbm.inventory.gui.GUIRBMKHeater;
 import com.hbm.lib.Library;
+import com.hbm.tileentity.IFluidCopiable;
 import com.hbm.tileentity.machine.rbmk.TileEntityRBMKConsole.ColumnType;
 import com.hbm.util.fauxpointtwelve.DirPos;
 import cpw.mods.fml.common.Optional;
@@ -28,11 +30,11 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 
 @Optional.InterfaceList({@Optional.Interface(iface = "li.cil.oc.api.network.SimpleComponent", modid = "opencomputers")})
-public class TileEntityRBMKHeater extends TileEntityRBMKSlottedBase implements IFluidStandardTransceiver, SimpleComponent, CompatHandler.OCComponent {
+public class TileEntityRBMKHeater extends TileEntityRBMKSlottedBase implements IFluidStandardTransceiver, SimpleComponent, IFluidCopiable, CompatHandler.OCComponent {
 
 	public FluidTank feed;
 	public FluidTank steam;
-	
+
 	public TileEntityRBMKHeater() {
 		super(1);
 		this.feed = new FluidTank(Fluids.COOLANT, 16_000);
@@ -43,7 +45,7 @@ public class TileEntityRBMKHeater extends TileEntityRBMKSlottedBase implements I
 	public String getName() {
 		return "container.rbmkHeater";
 	}
-	
+
 	@Override
 	public void updateEntity() {
 		
@@ -51,7 +53,7 @@ public class TileEntityRBMKHeater extends TileEntityRBMKSlottedBase implements I
 			
 			feed.setType(0, slots);
 
-			if(feed.getTankType().hasTrait(FT_Heatable.class)) {
+			if (feed.getTankType().hasTrait(FT_Heatable.class)) {
 				FT_Heatable trait = feed.getTankType().getTrait(FT_Heatable.class);
 				HeatingStep step = trait.getFirstStep();
 				steam.setTankType(step.typeProduced);
@@ -69,17 +71,17 @@ public class TileEntityRBMKHeater extends TileEntityRBMKSlottedBase implements I
 					steam.setFill(steam.getFill() + step.amountProduced * ops);
 					this.heat -= (step.heatReq * ops / TU_PER_DEGREE) * trait.getEfficiency(HeatingType.HEATEXCHANGER);
 				}
-				
+
 			} else {
 				steam.setTankType(Fluids.NONE);
 			}
-			
+
 			this.trySubscribe(feed.getTankType(), worldObj, xCoord, yCoord - 1, zCoord, Library.NEG_Y);
 			for(DirPos pos : getOutputPos()) {
 				if(this.steam.getFill() > 0) this.sendFluid(steam, worldObj, pos.getX(), pos.getY(), pos.getZ(), pos.getDir());
 			}
 		}
-		
+
 		super.updateEntity();
 	}
 
@@ -109,19 +111,19 @@ public class TileEntityRBMKHeater extends TileEntityRBMKSlottedBase implements I
 			};
 		}
 	}
-	
+
 	@Override
 	public void readFromNBT(NBTTagCompound nbt) {
 		super.readFromNBT(nbt);
-		
+
 		feed.readFromNBT(nbt, "feed");
 		steam.readFromNBT(nbt, "steam");
 	}
-	
+
 	@Override
 	public void writeToNBT(NBTTagCompound nbt) {
 		super.writeToNBT(nbt);
-		
+
 		feed.writeToNBT(nbt, "feed");
 		steam.writeToNBT(nbt, "steam");
 	}
@@ -142,13 +144,13 @@ public class TileEntityRBMKHeater extends TileEntityRBMKSlottedBase implements I
 
 	@Override
 	public void onMelt(int reduce) {
-		
+
 		int count = 1 + worldObj.rand.nextInt(2);
-		
+
 		for(int i = 0; i < count; i++) {
 			spawnDebris(DebrisType.BLANK);
 		}
-		
+
 		super.onMelt(reduce);
 	}
 
