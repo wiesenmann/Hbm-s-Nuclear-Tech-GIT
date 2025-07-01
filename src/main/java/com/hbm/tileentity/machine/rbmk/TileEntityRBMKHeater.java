@@ -186,6 +186,23 @@ public class TileEntityRBMKHeater extends TileEntityRBMKSlottedBase implements I
 		return new FluidTank[] {feed};
 	}
 
+	@Override
+	public NBTTagCompound getSettings(World world, int x, int y, int z) {
+		NBTTagCompound nbt = new NBTTagCompound();
+		if(getFluidIDToCopy().length > 0)
+			nbt.setIntArray("fluidID", getFluidIDToCopy());
+		return nbt;
+	}
+
+	@Override
+	public void pasteSettings(NBTTagCompound nbt, int index, World world, EntityPlayer player, int x, int y, int z) {
+		int[] ids = nbt.getIntArray("fluidID");
+		if(ids.length > 0) {
+			int id = ids[index];
+			feed.setTankType(Fluids.fromID(id));
+		}
+	}
+
 	//opencomputers stuff
 
 	@Override
